@@ -1,0 +1,1 @@
+# vis-remove-trailing-whitespace
