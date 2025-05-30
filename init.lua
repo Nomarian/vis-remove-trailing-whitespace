@@ -8,12 +8,11 @@ Use:
 	/RETURN/ for details
 	Setup() also registers wstrip as a command
 
-Bugs:
+Warning:
 	Subscribing with vis:command leads to core dump (vis 0.9)
-	Selection messes up sometimes
 
-Untested:
-	Ranges
+Bugs:
+	Selection messes up sometimes
 --]]
 
 local M = {}
@@ -55,6 +54,11 @@ end
 
 -- Manually do it instead of command
 -- This is necessary because vis:command fails
+--[[ Design:
+	Check if there is a cursor/selection, if there is, run a single gsub call
+	if not, run PerLine, which loops each line doing a gsub.
+	it also wipes out the selection sometimes. not our problem.
+--]]
 local Manual = function (file)
 	local lines = file.lines
 
@@ -65,12 +69,13 @@ local Manual = function (file)
 	local sel = vis.win.selection
 	local line = sel.line
 	if line then -- sometimes its nil?
+		-- A single gsub call, this makes it faster than PerLine
 		local text, changes = file:content(0,size):gsub("[\t ]+(\r?\n)","%1")
 		if changes>0 then
 			local col = sel.col
-			file:delete(0, size)
+			file:delete(0, size) -- wipes out selection/ranges
 			file:insert(0, text)
-			sel:to(line, col)
+			sel:to(line, col) -- resets selection
 		end
 	elseif file:content(0,size):find"[\t ]+\r?\n" then
 		PerLine(file, lines, 1, #lines-1)
