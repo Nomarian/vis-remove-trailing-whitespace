@@ -1,3 +1,2 @@
-Use a single gsub call, but running file:delete removes selections and anchors so cannot be used
 priorities are generalized but they're not a good idea on text modifying functions
 	The proper way of doing this is to have a list of functions, and if they change text, rerun the list of modifying text functions
