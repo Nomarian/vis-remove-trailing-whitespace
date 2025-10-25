@@ -7,6 +7,10 @@ Use:
 	require"vis.remove_trailing_whitespace"() -- runs Setup()
 	/RETURN/ for details
 	Setup() also registers wstrip as a command
+	M.ignore = { [?] = true } will not save if ? matches
+	if ? is a dict, it should be an extension, file path, directory, filename
+	if ? is an integer, its a function(vis.win.file, fullpath)
+		returning true means ignore
 
 Warning:
 	Subscribing with vis:command leads to core dump (vis 0.9)
@@ -15,20 +19,24 @@ Bugs:
 	Selection messes up sometimes
 --]]
 
-local M = {}
+------------------------- ENV
 
-local _G, string = _G, string
+local _G = _G
 local vis = _G.vis
+local env = {} for k,v in pairs(_G) do env[k] = v end
 local mt = {
-	__index = _G
-	-- function (_,k)
-		-- vis:info(
-			-- Format("Please set Key[%s] in trailing whitespace module",k)
-		-- )
-		-- return _G[k]
-	-- end
+	__index = function (_,k)
+		vis:info(
+			string.format("Missing Key[%s] in trailing whitespace module",k)
+		)
+		return nil
+	end
+	,__newindex = function (t,k,v)
+		error(string.format("ERROR: _G[%s]=%s",k,v),2)
+	end
 }
-local _ENV = setmetatable(M, mt)
+local _ENV = setmetatable(env, mt)
+
 
 --------------------- EDIT
 
@@ -53,9 +61,9 @@ local PerLine = function -- true --
 end
 
 -- Manually do it instead of command
--- This is necessary because vis:command fails
+-- This is necessary because vis:command fails for some reason?
 --[[ Design:
-	Check if there is a cursor/selection, if there is, run a single gsub call
+	if cursor/selection run a single gsub call
 	if not, run PerLine, which loops each line doing a gsub.
 	it also wipes out the selection sometimes. not our problem.
 --]]
@@ -83,11 +91,44 @@ local Manual = function (file)
 	return true
 end
 
+
 --------------------- REGISTER
 
 local events = vis.events
-local Subscribe = function ()
-	events.subscribe(events.FILE_SAVE_PRE, Manual)
+
+-- Ignore path and file (mostly)
+-- dict deals with path, extension, filename, basename
+-- [natural_int] contains functions that receive (file,path)
+local ignore = {}
+-- TODO: hashbang, syntax
+-- maybe use lexers.detect function on path and file content?
+
+local function Subscriber(file, path)
+	-- The point here is to return early and avoid running Manual()
+	for _,F in ipairs(ignore) do
+		if F(file, path) then return true end
+	end
+	if path and path~="" then
+		if
+			ignore[path] -- full path
+			or ignore[path:match"^.*/"] -- directory
+			or ignore[path:match"[^/]+$"] -- filename
+			or ignore[path:match"[^.]+$"] -- extension
+			or ignore[vis.win.syntax]
+		then
+			return true
+		end
+	end
+	Manual(file)
+	return true
+end
+
+local function Subscribe()
+	events.subscribe(events.FILE_SAVE_PRE, Subscriber)
+end
+
+local function UnSubscribe()
+	events.unsubscribe(events.FILE_SAVE_PRE, Subscriber)
 end
 
 local CommandRegister do
@@ -107,12 +148,33 @@ local Setup = function()
 	CommandRegister()
 end
 
---------------------- RETURN
-M.Setup = Setup
-M.Subscribe = Subscribe
-M.F = Manual
-M.Cmd = Cmd
-M.Register = CommandRegister
 
-mt.__call = Setup
-return M
+--------------------- RETURN
+
+return setmetatable(
+{
+	Setup = Setup
+	, Subscribe = Subscribe
+	, UnSubscribe = UnSubscribe
+	, Command = Cmd
+	, Register = CommandRegister
+	, ignore = ignore
+},{
+	__call = Setup
+
+	-- Bastardization of Nim's Style
+	-- Case insensitive
+	, __index = function (T,index)
+		if type(index)=="string" then
+			index = index:gsub("_",""):lower()
+			for key, val in pairs(T) do
+				if key:gsub("_",""):lower()==index then return val end
+			end
+		end
+		return nil
+	end
+
+	, __newindex = function ()
+		error"MODULE IS READ ONLY"
+	end
+})
