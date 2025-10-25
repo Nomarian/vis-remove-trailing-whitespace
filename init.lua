@@ -4,11 +4,11 @@ Synopsis:
 	Runs x/%s$/d
 
 Use:
-	require"vis.remove_trailing_whitespace"() -- runs Setup()
 	/RETURN/ for details
+	require"THIS MODULE"() -- runs Setup()
 	Setup() also registers wstrip as a command
 	M.ignore = { [?] = true } will not save if ? matches
-	if ? is a dict, it should be an extension, file path, directory, filename
+	if ? is a dictionary, it should be an extension, file path, directory, filename
 	if ? is an integer, its a function(vis.win.file, fullpath)
 		returning true means ignore
 
